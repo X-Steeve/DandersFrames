@@ -6,6 +6,8 @@
 * `/df resetgui` command now works — was referencing wrong frame variable, also shows the GUI after resetting
 * Settings UI can now be dragged from the bottom banner in addition to the title bar
 * Test mode frames now properly reset to global settings when exiting auto-profile editing
+* Fix profile corruption when spec auto-switch triggers while auto-profile overrides are active — overridden values were being permanently saved into the profile
+* Fix party frame mover (blue rectangle) showing wrong size after switching between profiles with different orientations or frame dimensions
 
 ### New Features
 * Auto-profiles now activate at runtime — raid frame settings automatically switch based on content type and raid size

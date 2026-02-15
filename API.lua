@@ -88,11 +88,20 @@ function DandersFrames_Import(str, profileKey)
         local success = DF:ApplyImportedProfile(importData, nil, nil, targetName, createNew)
         
         if success then
-            -- If profileKey was provided, switch to that profile
+            -- If profileKey was provided, save into that profile slot and switch to it
+            -- Strip runtime overrides to avoid contaminating the saved data
             if profileKey and profileKey ~= "" then
                 if DandersFramesDB_v2 then
+                    local stripped = false
+                    if DF.AutoProfilesUI and DF.AutoProfilesUI.StripRuntimeOverrides then
+                        stripped = DF.AutoProfilesUI:StripRuntimeOverrides()
+                    end
                     DandersFramesDB_v2.profiles[profileKey] = DF:DeepCopy(DF.db)
+                    if stripped and DF.AutoProfilesUI.ReapplyRuntimeOverrides then
+                        DF.AutoProfilesUI:ReapplyRuntimeOverrides()
+                    end
                     DandersFramesDB_v2.currentProfile = profileKey
+                    DF.db = DandersFramesDB_v2.profiles[profileKey]
                 end
             end
             

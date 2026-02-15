@@ -4146,12 +4146,24 @@ function DF:FullProfileRefresh()
     -- Clear category lookup cache (for export/import)
     DF._categoryLookup = nil
     
-    -- === UPDATE PARTY CONTAINER POSITION ===
+    -- === UPDATE PARTY CONTAINER POSITION AND SIZE ===
     if DF.container then
         DF.container:ClearAllPoints()
         DF.container:SetPoint("CENTER", UIParent, "CENTER", partyDB.anchorX or 0, partyDB.anchorY or 0)
+
+        -- Recalculate container size for new profile's frame dimensions/orientation
+        -- (mirrors SetPartyOrientation in Headers.lua)
+        local fw = partyDB.frameWidth or 120
+        local fh = partyDB.frameHeight or 50
+        local sp = partyDB.frameSpacing or 2
+        local maxCount = 5
+        if partyDB.growDirection == "HORIZONTAL" then
+            DF.container:SetSize(maxCount * (fw + sp) - sp, fh)
+        else
+            DF.container:SetSize(fw, maxCount * (fh + sp) - sp)
+        end
     end
-    
+
     -- === UPDATE RAID CONTAINER POSITION ===
     if DF.raidContainer then
         DF.raidContainer:ClearAllPoints()

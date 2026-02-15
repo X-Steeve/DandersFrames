@@ -2666,6 +2666,31 @@ function AutoProfilesUI:RemoveRuntimeProfile()
     self:RefreshTabOverrideStars()
 end
 
+-- Strip runtime overrides from DF.db.raid, restoring baseline values
+-- Called by Profile.lua before saving to prevent override contamination
+-- Returns true if overrides were stripped (caller should call ReapplyRuntimeOverrides after save)
+function AutoProfilesUI:StripRuntimeOverrides()
+    if not self.runtimeBaseline or not self.activeRuntimeProfile then return false end
+    local overrides = self.activeRuntimeProfile.overrides
+    if not overrides then return false end
+
+    for key, baselineValue in pairs(self.runtimeBaseline) do
+        SetRaidValue(key, DeepCopyValue(baselineValue))
+    end
+    return true
+end
+
+-- Re-apply runtime overrides to DF.db.raid after a clean save
+function AutoProfilesUI:ReapplyRuntimeOverrides()
+    if not self.activeRuntimeProfile then return end
+    local overrides = self.activeRuntimeProfile.overrides
+    if not overrides then return end
+
+    for key, value in pairs(overrides) do
+        SetRaidValue(key, DeepCopyValue(value))
+    end
+end
+
 -- Evaluate current content/raid state and apply/remove profiles as needed
 function AutoProfilesUI:EvaluateAndApply()
     if not DF.initialized then return end
