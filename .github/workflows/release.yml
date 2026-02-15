@@ -64,6 +64,16 @@ jobs:
             echo "NOTES_EOF"
           } >> $GITHUB_OUTPUT
 
+      - name: Create local tag for clean zip naming
+        if: steps.guard.outputs.skip != 'true'
+        run: |
+          VERSION="${{ steps.changelog.outputs.version }}"
+          # Create a local-only tag so the packager uses a clean name
+          # e.g. v4.0.5-alpha.3 -> zip becomes DandersFrames-v4.0.5-alpha.3
+          if ! git tag --list | grep -qx "$VERSION"; then
+            git tag "$VERSION"
+          fi
+
       - name: Package and Release
         if: steps.guard.outputs.skip != 'true'
         uses: BigWigsMods/packager@v2
