@@ -71,25 +71,20 @@ jobs:
           CF_API_KEY: ${{ secrets.CF_API_KEY }}
           GITHUB_OAUTH: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Notify Discord
-        if: steps.guard.outputs.skip != 'true' && success()
+      - name: Notify Discord (dev channel — alpha/beta)
+        if: steps.guard.outputs.skip != 'true' && success() && steps.changelog.outputs.channel != 'release'
         env:
-          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_DEV }}
           VERSION: ${{ steps.changelog.outputs.version }}
           CHANNEL: ${{ steps.changelog.outputs.channel }}
           NOTES: ${{ steps.changelog.outputs.notes }}
         run: |
           if [ -z "$DISCORD_WEBHOOK_URL" ]; then
-            echo "No Discord webhook configured, skipping."
+            echo "No dev Discord webhook configured, skipping."
             exit 0
           fi
 
           case "$CHANNEL" in
-            release)
-              COLOR=3066993
-              TITLE="DandersFrames ${VERSION} — New Release"
-              FOOTER="Available on CurseForge"
-              ;;
             beta)
               COLOR=16755200
               TITLE="DandersFrames ${VERSION} — Beta"
@@ -101,6 +96,43 @@ jobs:
               FOOTER="Available on CurseForge (Alpha channel)"
               ;;
           esac
+
+          PAYLOAD=$(jq -n \
+            --arg title "$TITLE" \
+            --arg desc "$NOTES" \
+            --arg color "$COLOR" \
+            --arg footer "$FOOTER" \
+            --arg url "https://www.curseforge.com/wow/addons/danders-frames" \
+            '{
+              embeds: [{
+                title: $title,
+                description: $desc,
+                color: ($color | tonumber),
+                url: $url,
+                footer: { text: $footer }
+              }]
+            }')
+
+          curl -s -o /dev/null -w "%{http_code}" \
+            -H "Content-Type: application/json" \
+            -d "$PAYLOAD" \
+            "$DISCORD_WEBHOOK_URL"
+
+      - name: Notify Discord (release channel — stable only)
+        if: steps.guard.outputs.skip != 'true' && success() && steps.changelog.outputs.channel == 'release'
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_RELEASE }}
+          VERSION: ${{ steps.changelog.outputs.version }}
+          NOTES: ${{ steps.changelog.outputs.notes }}
+        run: |
+          if [ -z "$DISCORD_WEBHOOK_URL" ]; then
+            echo "No release Discord webhook configured, skipping."
+            exit 0
+          fi
+
+          COLOR=3066993
+          TITLE="DandersFrames ${VERSION} — New Release"
+          FOOTER="Available on CurseForge"
 
           PAYLOAD=$(jq -n \
             --arg title "$TITLE" \

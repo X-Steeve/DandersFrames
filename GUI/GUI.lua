@@ -4333,7 +4333,17 @@ function DF:CreateGUI()
     
     local title = titleBar:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     title:SetPoint("LEFT", 12, 0)
-    local versionStr = DF.ADDON_VERSION or DF.VERSION or "?"
+    local addonVer = DF.ADDON_VERSION
+    local tocVer = DF.VERSION
+    -- Prefer ADDON_VERSION from CI, fall back to TOC version, skip placeholders
+    local versionStr
+    if addonVer and addonVer ~= "dev" then
+        versionStr = addonVer
+    elseif tocVer and not tocVer:find("@") then
+        versionStr = "v" .. tocVer
+    else
+        versionStr = "v" .. (DF.ADDON_VERSION_FALLBACK or "4.0.5")
+    end
     local channelTags = { alpha = " |cffff8800alpha|r", beta = " |cffff8800beta|r" }
     local channelTag = channelTags[DF.RELEASE_CHANNEL] or ""
     title:SetText("DandersFrames " .. versionStr .. channelTag)
@@ -4387,8 +4397,9 @@ function DF:CreateGUI()
     infoBtn:SetBackdropBorderColor(C_BORDER.r, C_BORDER.g, C_BORDER.b, 0.5)
     local infoIcon = infoBtn:CreateTexture(nil, "OVERLAY")
     infoIcon:SetPoint("CENTER")
-    infoIcon:SetSize(12, 12)
-    infoIcon:SetTexture("Interface\\AddOns\\DandersFrames\\Media\\Icons\\info")
+    infoIcon:SetSize(16, 16)
+    infoIcon:SetAtlas("QuestNormal")
+    infoIcon:SetDesaturated(true)
     infoIcon:SetVertexColor(C_TEXT_DIM.r, C_TEXT_DIM.g, C_TEXT_DIM.b)
     infoBtn:SetScript("OnEnter", function(self)
         local tc = GetThemeColor()
@@ -4400,23 +4411,29 @@ function DF:CreateGUI()
         infoIcon:SetVertexColor(C_TEXT_DIM.r, C_TEXT_DIM.g, C_TEXT_DIM.b)
     end)
 
-    -- Changelog overlay
+    -- Changelog overlay (covers full content area below title bar)
     local changelogOverlay = CreateFrame("Frame", nil, frame, "BackdropTemplate")
-    changelogOverlay:SetPoint("TOPLEFT", frame, "TOPLEFT", 12, -34)
-    changelogOverlay:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -12, 36)
+    changelogOverlay:SetPoint("TOPLEFT", frame, "TOPLEFT", 0, -30)
+    changelogOverlay:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", 0, 0)
     changelogOverlay:SetFrameStrata("FULLSCREEN_DIALOG")
     changelogOverlay:SetFrameLevel(300)
     CreatePanelBackdrop(changelogOverlay)
     changelogOverlay:Hide()
 
-    local changelogTitle = changelogOverlay:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    changelogTitle:SetPoint("TOPLEFT", 12, -10)
-    changelogTitle:SetText("Changelog")
+    -- Header bar within the overlay
+    local changelogHeader = CreateFrame("Frame", nil, changelogOverlay)
+    changelogHeader:SetPoint("TOPLEFT", 8, -8)
+    changelogHeader:SetPoint("TOPRIGHT", -8, -8)
+    changelogHeader:SetHeight(24)
+
+    local changelogTitle = changelogHeader:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    changelogTitle:SetPoint("LEFT", 4, 0)
+    changelogTitle:SetText("Changelog — " .. versionStr)
     changelogTitle:SetTextColor(C_TEXT.r, C_TEXT.g, C_TEXT.b)
 
-    local backBtn = CreateFrame("Button", nil, changelogOverlay, "BackdropTemplate")
+    local backBtn = CreateFrame("Button", nil, changelogHeader, "BackdropTemplate")
     backBtn:SetSize(60, 22)
-    backBtn:SetPoint("TOPRIGHT", -8, -6)
+    backBtn:SetPoint("RIGHT", 0, 0)
     CreateElementBackdrop(backBtn)
     local backText = backBtn:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     backText:SetPoint("CENTER")
@@ -4432,7 +4449,7 @@ function DF:CreateGUI()
     backBtn:SetScript("OnClick", function() changelogOverlay:Hide() end)
 
     local changelogScroll = CreateFrame("ScrollFrame", nil, changelogOverlay, "UIPanelScrollFrameTemplate")
-    changelogScroll:SetPoint("TOPLEFT", 8, -34)
+    changelogScroll:SetPoint("TOPLEFT", 8, -38)
     changelogScroll:SetPoint("BOTTOMRIGHT", -26, 8)
 
     local changelogEdit = CreateFrame("EditBox", nil, changelogScroll)
