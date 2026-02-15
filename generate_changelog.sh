@@ -132,11 +132,9 @@ ${CHANGELOG_CONTENT}
 ]===]
 LUAEOF
 
-# Pre-set TOC version for alpha builds so the packager uses our clean version
-# For tagged builds, the packager replaces @project-version@ with the tag name
-if [ "$RELEASE_CHANNEL" = "alpha" ]; then
-    sed -i "s/@project-version@/${VERSION}/" DandersFrames.toc
-    echo "Pre-set TOC version to ${VERSION}"
-fi
+# Set TOC version for local testing and alpha builds
+# Handles both the CI placeholder (@project-version@) and previously set versions
+sed -i "s/^## Version: .*/## Version: ${VERSION}/" DandersFrames.toc
+echo "Set TOC version to ${VERSION}"
 
 echo "Generated ${OUTPUT_FILE}: version=${VERSION} channel=${RELEASE_CHANNEL} date=${BUILD_DATE}"
