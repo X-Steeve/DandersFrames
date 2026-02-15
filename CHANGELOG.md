@@ -9,6 +9,7 @@
 * Fix profile corruption when spec auto-switch triggers while auto-profile overrides are active — overridden values were being permanently saved into the profile
 * Fix party frame mover (blue rectangle) showing wrong size after switching between profiles with different orientations or frame dimensions
 * Fix GUI controls stomping auto-profile overrides — changing a slider/checkbox/dropdown while a runtime profile is active no longer causes frames to flash with the wrong values
+* Fix Wago UI pack imports overwriting previous profiles — importing multiple profiles sequentially no longer corrupts the first imported profile
 
 ### New Features
 * Auto-profiles now activate at runtime — raid frame settings automatically switch based on content type and raid size

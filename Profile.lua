@@ -502,27 +502,30 @@ end
 -- selectedFrameTypes: table like {party = true, raid = true}, or nil for all in the data
 -- newProfileName: name for the new profile to create (if nil, uses name from import data)
 -- createNewProfile: if true, creates a new profile instead of overwriting current
-function DF:ApplyImportedProfile(importData, selectedCategories, selectedFrameTypes, newProfileName, createNewProfile)
+-- allowOverwrite: if true, allow overwriting an existing profile with the same name (used by Wago API)
+function DF:ApplyImportedProfile(importData, selectedCategories, selectedFrameTypes, newProfileName, createNewProfile, allowOverwrite)
     if not importData then return false end
-    
+
     local importInfo = self:GetImportInfo(importData)
-    
+
     -- Default to all available frame types
     selectedFrameTypes = selectedFrameTypes or {
         party = importInfo.hasParty,
         raid = importInfo.hasRaid,
     }
-    
+
     -- Handle profile creation
     if createNewProfile then
         local profileName = newProfileName or importInfo.profileName or "Imported Profile"
-        
-        -- Ensure unique name by checking the actual profiles storage
-        local baseName = profileName
-        local counter = 1
-        while DandersFramesDB_v2 and DandersFramesDB_v2.profiles and DandersFramesDB_v2.profiles[profileName] do
-            counter = counter + 1
-            profileName = baseName .. " " .. counter
+
+        -- Ensure unique name unless overwrite is explicitly allowed (e.g. Wago API imports)
+        if not allowOverwrite then
+            local baseName = profileName
+            local counter = 1
+            while DandersFramesDB_v2 and DandersFramesDB_v2.profiles and DandersFramesDB_v2.profiles[profileName] do
+                counter = counter + 1
+                profileName = baseName .. " " .. counter
+            end
         end
         
         -- Initialize profiles table if needed
