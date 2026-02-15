@@ -95,33 +95,23 @@ jobs:
           fi
 
           case "$CHANNEL" in
-            beta)
-              COLOR=16755200
-              TITLE="DandersFrames ${VERSION} — Beta"
-              FOOTER="Available on CurseForge (Beta channel)"
-              ;;
-            *)
-              COLOR=9474192
-              TITLE="DandersFrames ${VERSION} — Alpha"
-              FOOTER="Available on CurseForge (Alpha channel)"
-              ;;
+            beta)  EMOJI="🧪"; LABEL="Beta ${VERSION} Available for Testing!" ;;
+            *)     EMOJI="🧪"; LABEL="Alpha ${VERSION} Available for Testing!" ;;
           esac
 
-          PAYLOAD=$(jq -n \
-            --arg title "$TITLE" \
-            --arg desc "$NOTES" \
-            --arg color "$COLOR" \
-            --arg footer "$FOOTER" \
-            --arg url "https://www.curseforge.com/wow/addons/danders-frames" \
-            '{
-              embeds: [{
-                title: $title,
-                description: $desc,
-                color: ($color | tonumber),
-                url: $url,
-                footer: { text: $footer }
-              }]
-            }')
+          # Build changelog body from NOTES (strip the ## header line, keep the rest)
+          BODY=$(echo "$NOTES" | sed '1{/^## /d}' | sed '/^[[:space:]]*$/d')
+
+          MESSAGE="### ${EMOJI} ${LABEL}
+          **Download:** [CurseForge](<https://www.curseforge.com/wow/addons/danders-frames>) *(select \"$(echo "$CHANNEL" | sed 's/.*/\u&/')\" from the dropdown)* • [GitHub Releases](<https://github.com/DanderBot/DandersFrames/releases>)
+          **Support Development:** [PayPal](<https://paypal.me/dandersframesaddon>)
+          ${BODY}
+          *$(echo "$CHANNEL" | sed 's/.*/\u&/') builds are available on CurseForge by selecting \"$(echo "$CHANNEL" | sed 's/.*/\u&/')\" in the file dropdown, or from [GitHub Releases](<https://github.com/DanderBot/DandersFrames/releases>).*"
+
+          # Remove leading whitespace from heredoc-style indentation
+          MESSAGE=$(echo "$MESSAGE" | sed 's/^          //')
+
+          PAYLOAD=$(jq -n --arg content "$MESSAGE" '{ content: $content }')
 
           curl -s -o /dev/null -w "%{http_code}" \
             -H "Content-Type: application/json" \
@@ -140,25 +130,20 @@ jobs:
             exit 0
           fi
 
-          COLOR=3066993
-          TITLE="DandersFrames ${VERSION} — New Release"
-          FOOTER="Available on CurseForge"
+          # Build changelog body from NOTES (strip the ## header line, keep the rest)
+          BODY=$(echo "$NOTES" | sed '1{/^## /d}' | sed '/^[[:space:]]*$/d')
 
-          PAYLOAD=$(jq -n \
-            --arg title "$TITLE" \
-            --arg desc "$NOTES" \
-            --arg color "$COLOR" \
-            --arg footer "$FOOTER" \
-            --arg url "https://www.curseforge.com/wow/addons/danders-frames" \
-            '{
-              embeds: [{
-                title: $title,
-                description: $desc,
-                color: ($color | tonumber),
-                url: $url,
-                footer: { text: $footer }
-              }]
-            }')
+          MESSAGE="<@&1444387824005808128>
+          ### 🔔 Update ${VERSION} is Live!
+          **Download:** [CurseForge](<https://www.curseforge.com/wow/addons/danders-frames>) • [Wago](<https://addons.wago.io/addons/danders-frames>) • [GitHub Releases](<https://github.com/DanderBot/DandersFrames/releases>)
+          **Support Development:** [PayPal](<https://paypal.me/dandersframesaddon>)
+          ${BODY}
+          *Note: It may take 15-30 minutes to appear on the CurseForge client.*"
+
+          # Remove leading whitespace from heredoc-style indentation
+          MESSAGE=$(echo "$MESSAGE" | sed 's/^          //')
+
+          PAYLOAD=$(jq -n --arg content "$MESSAGE" '{ content: $content }')
 
           curl -s -o /dev/null -w "%{http_code}" \
             -H "Content-Type: application/json" \
