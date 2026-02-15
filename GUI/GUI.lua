@@ -573,6 +573,11 @@ local function RefreshAllOverrideIndicators()
 end
 GUI.RefreshAllOverrideIndicators = RefreshAllOverrideIndicators
 
+-- Allow other files to register widgets with override indicators
+function GUI.RegisterOverrideWidget(widget)
+    table.insert(overrideWidgets, widget)
+end
+
 -- Slash command to toggle debug mode
 SLASH_DFOVERRIDEDEBUG1 = "/dfoverridedebug"
 SlashCmdList["DFOVERRIDEDEBUG"] = function()

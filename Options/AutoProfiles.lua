@@ -53,8 +53,38 @@ local function ParseTableKey(key)
     return nil, nil
 end
 
--- Get a value from db.raid, handling table-based keys
+-- Parse pinned frame keys (e.g., "pinned.1.scale" -> 1, "scale")
+local function ParsePinnedKey(key)
+    local setIndex, setting = key:match("^pinned%.(%d+)%.(.+)$")
+    if setIndex and setting then
+        return tonumber(setIndex), setting
+    end
+    return nil, nil
+end
+
+-- Settings that can be overridden per pinned frame set
+local PINNED_OVERRIDABLE = {
+    enabled = true, locked = true, showLabel = true,
+    growDirection = true, unitsPerRow = true, scale = true,
+    horizontalSpacing = true, verticalSpacing = true, frameAnchor = true,
+    columnAnchor = true, autoAddTanks = true, autoAddHealers = true,
+    autoAddDPS = true, keepOfflinePlayers = true, players = true,
+}
+
+-- Get a value from the live database, handling raid keys, table keys, and pinned keys
 local function GetRaidValue(key)
+    -- Pinned frame key (stored at DF.db.raid.pinnedFrames, not DF.db.pinnedFrames)
+    local setIndex, setting = ParsePinnedKey(key)
+    if setIndex and setting then
+        local pf = DF.db.raid and DF.db.raid.pinnedFrames
+        local sets = pf and pf.sets
+        if sets and sets[setIndex] then
+            return sets[setIndex][setting]
+        end
+        return nil
+    end
+    
+    -- Table-based raid key
     local tableName, index = ParseTableKey(key)
     if tableName and index then
         local tbl = DF.db.raid[tableName]
@@ -62,13 +92,26 @@ local function GetRaidValue(key)
             return tbl[index]
         end
         return nil
-    else
-        return DF.db.raid[key]
     end
+    
+    -- Direct raid key
+    return DF.db.raid[key]
 end
 
--- Set a value in db.raid, handling table-based keys
+-- Set a value in the live database, handling raid keys, table keys, and pinned keys
 local function SetRaidValue(key, value)
+    -- Pinned frame key (stored at DF.db.raid.pinnedFrames, not DF.db.pinnedFrames)
+    local setIndex, setting = ParsePinnedKey(key)
+    if setIndex and setting then
+        local pf = DF.db.raid and DF.db.raid.pinnedFrames
+        local sets = pf and pf.sets
+        if sets and sets[setIndex] then
+            sets[setIndex][setting] = value
+        end
+        return
+    end
+    
+    -- Table-based raid key
     local tableName, index = ParseTableKey(key)
     if tableName and index then
         local tbl = DF.db.raid[tableName]
@@ -80,11 +123,12 @@ local function SetRaidValue(key, value)
     end
 end
 
--- Get a value from the global snapshot, handling table-based keys
+-- Get a value from the global snapshot, handling all key types
+-- Pinned keys are stored directly in the snapshot as "pinned.1.scale" etc
 local function GetSnapshotValue(snapshot, key)
     if not snapshot then return nil, false end
     
-    -- Direct key match
+    -- Direct key match (works for pinned keys and direct raid keys)
     if snapshot[key] ~= nil then
         return snapshot[key], true
     end
@@ -98,15 +142,38 @@ local function GetSnapshotValue(snapshot, key)
     return nil, false
 end
 
+-- Find a matching profile within a content type by raid size
+-- Returns the first profile whose min-max range includes raidSize, or nil
+local function FindMatchingProfile(contentKey, raidSize)
+    local autoDb = DF.db and DF.db.raidAutoProfiles
+    if not autoDb then return nil end
+    
+    local ct = autoDb[contentKey]
+    if not ct or not ct.profiles then return nil end
+    
+    for _, profile in ipairs(ct.profiles) do
+        if raidSize >= profile.min and raidSize <= profile.max then
+            return profile
+        end
+    end
+    
+    return nil
+end
+
 -- Initialize database defaults
 function AutoProfilesUI:InitDefaults()
     if not DF.db.raidAutoProfiles then
         DF.db.raidAutoProfiles = {
             enabled = false,
+            howItWorksCollapsed = false,
             instanced = { profiles = {} },
             mythic = { profile = nil },
             openWorld = { profiles = {} }
         }
+    end
+    -- Migration: add howItWorksCollapsed if missing from existing db
+    if DF.db.raidAutoProfiles.howItWorksCollapsed == nil then
+        DF.db.raidAutoProfiles.howItWorksCollapsed = false
     end
 end
 
@@ -284,9 +351,51 @@ function AutoProfilesUI:BuildPage(GUI, pageFrame, db, Add, AddSpace)
         statusLine1:SetText("|cff999999Not in a raid group|r")
         statusLine2:SetText("")
     else
-        -- TODO: Get actual active profile from detection system
-        statusLine1:SetText("|cff66ff66Content:|r |cffffffffInstanced / PvP|r |cff666666— Not detected|r")
-        statusLine2:SetText("|cff66ff66Profile:|r |cff999999None active (using global settings)|r")
+        -- Live detection
+        local contentType = DF:GetContentType()
+        local raidSize = GetNumGroupMembers()
+        
+        -- Map content type to display name
+        local contentNames = {
+            mythic = "Mythic",
+            instanced = "Instanced / PvP",
+            battleground = "Instanced / PvP",
+            openWorld = "Open World",
+            arena = "Arena",
+        }
+        local contentDisplay = contentNames[contentType] or "Unknown"
+        
+        -- Get instance name if available
+        local instanceName = select(1, GetInstanceInfo())
+        local difficultyName = select(4, GetInstanceInfo())
+        local contentDetail = ""
+        if instanceName and instanceName ~= "" and contentType ~= "openWorld" then
+            contentDetail = " |cff666666— " .. instanceName
+            if difficultyName and difficultyName ~= "" then
+                contentDetail = contentDetail .. " (" .. difficultyName .. ")"
+            end
+            contentDetail = contentDetail .. "|r"
+        end
+        
+        statusLine1:SetText("|cff66ff66Content:|r |cffffffff" .. contentDisplay .. "|r" .. contentDetail .. "  |cff666666(" .. raidSize .. " players)|r")
+        
+        -- Show active profile
+        local profile, profileKey = self:GetActiveProfile()
+        if profile then
+            local rangeText = ""
+            if profileKey == "mythic" then
+                rangeText = "20 fixed"
+            elseif profile.min and profile.max then
+                rangeText = profile.min .. "-" .. profile.max
+            end
+            local overrideCount = 0
+            if profile.overrides then
+                for _ in pairs(profile.overrides) do overrideCount = overrideCount + 1 end
+            end
+            statusLine2:SetText("|cff66ff66Profile:|r |cffffffff\"" .. (profile.name or "Unnamed") .. "\"|r |cff666666— " .. rangeText .. " · " .. overrideCount .. " override" .. (overrideCount ~= 1 and "s" or "") .. "|r")
+        else
+            statusLine2:SetText("|cff66ff66Profile:|r |cff999999None active (using global settings)|r")
+        end
     end
     
     Add(statusContainer, 60, "both")
@@ -294,10 +403,14 @@ function AutoProfilesUI:BuildPage(GUI, pageFrame, db, Add, AddSpace)
     AddSpace(5, "both")
     
     -- =============================================
-    -- Info Box
+    -- How It Works Section (collapsible, persisted)
     -- =============================================
+    local infoHeaderHeight = 28
+    local infoBodyHeight = 206
+    local infoCollapsed = autoDb.howItWorksCollapsed
+    
     local infoContainer = CreateFrame("Frame", nil, pageFrame.child, "BackdropTemplate")
-    infoContainer:SetSize(500, 45)
+    infoContainer:SetSize(500, infoHeaderHeight + (infoCollapsed and 0 or infoBodyHeight))
     infoContainer:SetBackdrop({
         bgFile = "Interface\\Buttons\\WHITE8x8",
         edgeFile = "Interface\\Buttons\\WHITE8x8",
@@ -306,15 +419,137 @@ function AutoProfilesUI:BuildPage(GUI, pageFrame, db, Add, AddSpace)
     infoContainer:SetBackdropColor(0.15, 0.1, 0.05, 0.5)
     infoContainer:SetBackdropBorderColor(0.4, 0.25, 0.1, 0.5)
     
-    local infoText = infoContainer:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    infoText:SetPoint("TOPLEFT", 10, -8)
-    infoText:SetPoint("BOTTOMRIGHT", -10, 8)
-    infoText:SetJustifyH("LEFT")
-    infoText:SetJustifyV("TOP")
-    infoText:SetText("|cffffffffHow it works:|r Create profiles for different player ranges within each content type. Profiles only store settings that differ from global. If no range matches, global settings are used.")
-    infoText:SetTextColor(0.7, 0.7, 0.7)
+    -- Clickable header
+    local infoHeader = CreateFrame("Button", nil, infoContainer)
+    infoHeader:SetPoint("TOPLEFT", 0, 0)
+    infoHeader:SetPoint("TOPRIGHT", 0, 0)
+    infoHeader:SetHeight(infoHeaderHeight)
     
-    Add(infoContainer, 50, "both")
+    local infoArrow = infoHeader:CreateTexture(nil, "OVERLAY")
+    infoArrow:SetPoint("LEFT", 10, 0)
+    infoArrow:SetSize(12, 12)
+    infoArrow:SetTexture("Interface\\AddOns\\DandersFrames\\Media\\Icons\\" .. (infoCollapsed and "chevron_right" or "expand_more"))
+    infoArrow:SetVertexColor(0.6, 0.6, 0.6)
+    
+    local howTitle = infoHeader:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    howTitle:SetPoint("LEFT", 28, 0)
+    howTitle:SetText("How it works")
+    howTitle:SetTextColor(1, 1, 1)
+    
+    infoHeader:SetScript("OnEnter", function() infoArrow:SetVertexColor(1, 0.8, 0.2) end)
+    infoHeader:SetScript("OnLeave", function() infoArrow:SetVertexColor(0.6, 0.6, 0.6) end)
+    
+    -- Body
+    local infoBody = CreateFrame("Frame", nil, infoContainer)
+    infoBody:SetPoint("TOPLEFT", 0, -infoHeaderHeight)
+    infoBody:SetPoint("TOPRIGHT", 0, -infoHeaderHeight)
+    infoBody:SetHeight(infoBodyHeight)
+    if infoCollapsed then infoBody:Hide() end
+    
+    -- Toggle
+    infoHeader:SetScript("OnClick", function()
+        autoDb.howItWorksCollapsed = not autoDb.howItWorksCollapsed
+        if autoDb.howItWorksCollapsed then
+            infoArrow:SetTexture("Interface\\AddOns\\DandersFrames\\Media\\Icons\\chevron_right")
+            infoBody:Hide()
+        else
+            infoArrow:SetTexture("Interface\\AddOns\\DandersFrames\\Media\\Icons\\expand_more")
+            infoBody:Show()
+        end
+        -- Refresh page to recalculate layout
+        if pageFrame.Refresh then pageFrame:Refresh() end
+    end)
+    
+    local yOff = -4
+    
+    -- Step 1
+    local step1 = infoBody:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    step1:SetPoint("TOPLEFT", 10, yOff)
+    step1:SetPoint("RIGHT", infoBody, "RIGHT", -10, 0)
+    step1:SetJustifyH("LEFT")
+    step1:SetText("|cffff8020" .. "1.|r Create profiles below for different player ranges within each content type. Profiles only store settings that |cffffffffdiffer|r from your global settings — everything else is inherited automatically.")
+    step1:SetTextColor(0.65, 0.65, 0.65)
+    yOff = yOff - 30
+    
+    -- Step 2
+    local step2 = infoBody:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    step2:SetPoint("TOPLEFT", 10, yOff)
+    step2:SetPoint("RIGHT", infoBody, "RIGHT", -10, 0)
+    step2:SetJustifyH("LEFT")
+    step2:SetText("|cffff8020" .. "2.|r Click |cffffffffEdit Settings|r on a profile to customise it. This takes you to the settings tabs with an editing banner at the top. While editing, any setting you change is stored as an override for that profile only.")
+    step2:SetTextColor(0.65, 0.65, 0.65)
+    yOff = yOff - 30
+    
+    -- Step 3 - visual indicators
+    local step3 = infoBody:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    step3:SetPoint("TOPLEFT", 10, yOff)
+    step3:SetPoint("RIGHT", infoBody, "RIGHT", -10, 0)
+    step3:SetJustifyH("LEFT")
+    step3:SetText("|cffff8020" .. "3.|r While editing, each setting shows its override status:")
+    step3:SetTextColor(0.65, 0.65, 0.65)
+    yOff = yOff - 16
+    
+    -- Visual example row 1: Matching global (green check)
+    local exRow1 = CreateFrame("Frame", nil, infoBody)
+    exRow1:SetPoint("TOPLEFT", 24, yOff)
+    exRow1:SetSize(460, 16)
+    
+    local ex1Check = exRow1:CreateTexture(nil, "OVERLAY")
+    ex1Check:SetPoint("LEFT", 0, 0)
+    ex1Check:SetSize(10, 10)
+    ex1Check:SetTexture("Interface\\AddOns\\DandersFrames\\Media\\Icons\\check")
+    ex1Check:SetVertexColor(0.3, 0.7, 0.3)
+    
+    local ex1Text = exRow1:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    ex1Text:SetPoint("LEFT", ex1Check, "RIGHT", 4, 0)
+    ex1Text:SetText("|cff4db84dGlobal: 80|r |cff666666— Setting matches global, no override stored|r")
+    yOff = yOff - 18
+    
+    -- Visual example row 2: Overridden (star + reset)
+    local exRow2 = CreateFrame("Frame", nil, infoBody)
+    exRow2:SetPoint("TOPLEFT", 24, yOff)
+    exRow2:SetSize(460, 16)
+    
+    local ex2Star = exRow2:CreateTexture(nil, "OVERLAY")
+    ex2Star:SetPoint("LEFT", 0, 0)
+    ex2Star:SetSize(12, 12)
+    ex2Star:SetTexture("Interface\\AddOns\\DandersFrames\\Media\\Icons\\star")
+    ex2Star:SetVertexColor(1, 0.8, 0.2)
+    
+    local ex2ResetBg = exRow2:CreateTexture(nil, "ARTWORK")
+    ex2ResetBg:SetPoint("LEFT", ex2Star, "RIGHT", 4, 0)
+    ex2ResetBg:SetSize(14, 14)
+    ex2ResetBg:SetColorTexture(0.1, 0.1, 0.1, 0.8)
+    
+    local ex2Reset = exRow2:CreateTexture(nil, "OVERLAY")
+    ex2Reset:SetPoint("CENTER", ex2ResetBg, "CENTER", 0, 0)
+    ex2Reset:SetSize(10, 10)
+    ex2Reset:SetTexture("Interface\\AddOns\\DandersFrames\\Media\\Icons\\refresh")
+    ex2Reset:SetVertexColor(0.6, 0.6, 0.6)
+    
+    local ex2Text = exRow2:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    ex2Text:SetPoint("LEFT", ex2ResetBg, "RIGHT", 6, 0)
+    ex2Text:SetText("|cffe6cc80" .. "Modified|r |cff666666— Setting differs from global. Click|r |cffffffffreset|r |cff666666to revert.|r")
+    yOff = yOff - 22
+    
+    -- Step 4
+    local step4 = infoBody:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    step4:SetPoint("TOPLEFT", 10, yOff)
+    step4:SetPoint("RIGHT", infoBody, "RIGHT", -10, 0)
+    step4:SetJustifyH("LEFT")
+    step4:SetText("|cffff8020" .. "4.|r Click |cffffffffExit Editing|r when done. Your overrides are saved to the profile. If you change a setting back to match global, the override is automatically removed.")
+    step4:SetTextColor(0.65, 0.65, 0.65)
+    yOff = yOff - 30
+    
+    -- Step 5
+    local step5 = infoBody:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    step5:SetPoint("TOPLEFT", 10, yOff)
+    step5:SetPoint("RIGHT", infoBody, "RIGHT", -10, 0)
+    step5:SetJustifyH("LEFT")
+    step5:SetText("|cffff8020" .. "5.|r When you enter matching content, the profile's overrides are applied on top of your global settings. If no profile matches, global settings are used as-is.")
+    step5:SetTextColor(0.65, 0.65, 0.65)
+    
+    Add(infoContainer, infoHeaderHeight + (infoCollapsed and 0 or infoBodyHeight), "both")
     
     AddSpace(10, "both")
     
@@ -1280,6 +1515,48 @@ function AutoProfilesUI:EnterEditing(contentType, profileIndex)
         end
     end
     
+    -- Snapshot pinned frames overridable settings (stored as "pinned.N.setting" keys)
+    -- Pinned frames live at db.raid.pinnedFrames (not db.pinnedFrames)
+    -- IMPORTANT: Iterate PINNED_OVERRIDABLE keys rather than set keys to ensure
+    -- we capture ALL overridable settings, even ones that are nil due to missing migration.
+    -- If a key is nil, backfill a default so both the snapshot and set are consistent.
+    local PINNED_DEFAULTS = {
+        enabled = false, locked = false, showLabel = false,
+        growDirection = "HORIZONTAL", unitsPerRow = 5, scale = 1.0,
+        horizontalSpacing = 2, verticalSpacing = 2,
+        frameAnchor = "START", columnAnchor = "START",
+        autoAddTanks = false, autoAddHealers = false, autoAddDPS = false,
+        keepOfflinePlayers = true, players = {},
+    }
+    local pinnedFrames = DF.db.raid and DF.db.raid.pinnedFrames
+    if pinnedFrames and pinnedFrames.sets then
+        for setIdx, set in pairs(pinnedFrames.sets) do
+            for setting, _ in pairs(PINNED_OVERRIDABLE) do
+                local value = set[setting]
+                -- Backfill nil values with defaults so snapshot always has a baseline
+                if value == nil then
+                    value = PINNED_DEFAULTS[setting]
+                    if type(value) == "table" then
+                        local copy = {}
+                        for k, v in pairs(value) do copy[k] = v end
+                        set[setting] = copy
+                        value = set[setting]
+                    else
+                        set[setting] = value
+                    end
+                end
+                local snapKey = "pinned." .. setIdx .. "." .. setting
+                if type(value) == "table" then
+                    local copy = {}
+                    for k, v in pairs(value) do copy[k] = v end
+                    self.globalSnapshot[snapKey] = copy
+                else
+                    self.globalSnapshot[snapKey] = value
+                end
+            end
+        end
+    end
+    
     -- Apply existing overrides to db.raid for live preview
     if self.editingProfile.overrides then
         for key, value in pairs(self.editingProfile.overrides) do
@@ -1290,6 +1567,18 @@ function AutoProfilesUI:EnterEditing(contentType, profileIndex)
             else
                 SetRaidValue(key, value)
             end
+        end
+    end
+    
+    -- Refresh pinned frames to show overridden settings in live preview
+    if DF.PinnedFrames then
+        local pf = DF.db.raid and DF.db.raid.pinnedFrames
+        for i = 1, 2 do
+            local setEnabled = pf and pf.sets and pf.sets[i] and pf.sets[i].enabled
+            DF.PinnedFrames:SetEnabled(i, setEnabled or false)
+            DF.PinnedFrames:ApplyLayoutSettings(i)
+            DF.PinnedFrames:ResizeContainer(i)
+            DF.PinnedFrames:UpdateHeaderNameList(i)
         end
     end
     
@@ -1306,7 +1595,7 @@ function AutoProfilesUI:EnterEditing(contentType, profileIndex)
 end
 
 function AutoProfilesUI:ExitEditing(skipUIUpdates)
-    -- Diff safety net: before restoring globals, scan db.raid vs snapshot
+    -- Diff safety net: before restoring globals, scan live values vs snapshot
     -- to catch any overrides that weren't explicitly tracked by controls
     if self.editingProfile and self.globalSnapshot then
         if not self.editingProfile.overrides then
@@ -1315,13 +1604,13 @@ function AutoProfilesUI:ExitEditing(skipUIUpdates)
         local overrides = self.editingProfile.overrides
         
         for key, snapshotVal in pairs(self.globalSnapshot) do
-            local currentVal = DF.db.raid[key]
+            local currentVal = GetRaidValue(key)  -- Handles raid, table, and pinned keys
             local matches = true
             
             if type(snapshotVal) == "table" and type(currentVal) == "table" then
                 -- Deep compare (handles arrays and color tables)
                 if #snapshotVal > 0 or #currentVal > 0 then
-                    -- Array comparison (ordered)
+                    -- Array comparison (ordered) - important for players lists
                     if #snapshotVal ~= #currentVal then
                         matches = false
                     else
@@ -1363,7 +1652,8 @@ function AutoProfilesUI:ExitEditing(skipUIUpdates)
         end
     end
     
-    -- Restore all modified db.raid values back to their true globals
+    -- Restore all modified values back to their true globals
+    -- SetRaidValue handles raid keys, table keys, and pinned keys
     if self.globalSnapshot then
         for key, originalValue in pairs(self.globalSnapshot) do
             if type(originalValue) == "table" then
@@ -1386,6 +1676,19 @@ function AutoProfilesUI:ExitEditing(skipUIUpdates)
     
     -- Refresh frames to show global settings again
     if DF.UpdateAll then DF:UpdateAll() end
+    
+    -- Refresh pinned frames to show global settings again
+    if DF.PinnedFrames then
+        local pf = DF.db.raid and DF.db.raid.pinnedFrames
+        for i = 1, 2 do
+            -- Restore enabled state first (hides containers if globally disabled)
+            local setEnabled = pf and pf.sets and pf.sets[i] and pf.sets[i].enabled
+            DF.PinnedFrames:SetEnabled(i, setEnabled or false)
+            DF.PinnedFrames:ApplyLayoutSettings(i)
+            DF.PinnedFrames:ResizeContainer(i)
+            DF.PinnedFrames:UpdateHeaderNameList(i)
+        end
+    end
     
     -- Refresh UI to hide banner and re-enable Auto Profiles tab
     self:RefreshEditingUI()
@@ -1787,11 +2090,102 @@ function AutoProfilesUI:IsSettingOverridden(key)
 end
 
 -- Get active profile based on current content/raid size (for runtime, not editing)
+-- Returns: profile, contentKey (or nil, nil if no match)
 function AutoProfilesUI:GetActiveProfile()
     local autoDb = DF.db.raidAutoProfiles
     if not autoDb or not autoDb.enabled then return nil end
     
-    -- For now, return nil - full detection will be implemented in Phase 11
-    -- This is just a stub for the override system
-    return nil
+    -- Must be in a raid group for auto-profiles to apply
+    if not IsInRaid() then return nil end
+    
+    -- Use the existing content type detection from Core.lua
+    local contentType = DF:GetContentType()
+    if not contentType then return nil end
+    
+    -- Mythic: single profile, no range check needed
+    if contentType == "mythic" then
+        local mythicProfile = autoDb.mythic and autoDb.mythic.profile
+        if mythicProfile then
+            return mythicProfile, "mythic"
+        end
+        return nil
+    end
+    
+    -- Map content type to auto-profile key
+    -- "battleground" falls under "instanced" (the "Instanced / PvP" category)
+    local profileKey
+    if contentType == "instanced" or contentType == "battleground" then
+        profileKey = "instanced"
+    elseif contentType == "openWorld" then
+        profileKey = "openWorld"
+    else
+        -- Arena or unknown content type - no auto-profiles
+        return nil
+    end
+    
+    -- Find matching profile by raid size within the content type
+    local raidSize = GetNumGroupMembers()
+    local profile = FindMatchingProfile(profileKey, raidSize)
+    if profile then
+        return profile, profileKey
+    end
+    
+    return nil  -- No matching range, use global settings
+end
+
+-- ============================================================
+-- DEBUG: Auto Profile Detection Test
+-- Usage: /dfautotest - Print current detection results
+-- ============================================================
+
+SLASH_DFAUTOTEST1 = "/dfautotest"
+SlashCmdList["DFAUTOTEST"] = function()
+    local autoDb = DF.db and DF.db.raidAutoProfiles
+    local enabled = autoDb and autoDb.enabled
+    local inRaid = IsInRaid()
+    local contentType = DF.GetContentType and DF:GetContentType() or "N/A"
+    local raidSize = GetNumGroupMembers()
+    
+    print("|cffff8020DandersFrames Auto Profile Detection:|r")
+    print("  Enabled: " .. (enabled and "|cff00ff00YES|r" or "|cffff4444NO|r"))
+    print("  In Raid: " .. (inRaid and "|cff00ff00YES|r" or "|cffff4444NO|r"))
+    print("  Content Type: |cffffffff" .. tostring(contentType) .. "|r")
+    print("  Raid Size: |cffffffff" .. raidSize .. "|r")
+    
+    local profile, profileKey = AutoProfilesUI:GetActiveProfile()
+    if profile then
+        local overrideCount = 0
+        if profile.overrides then
+            for _ in pairs(profile.overrides) do
+                overrideCount = overrideCount + 1
+            end
+        end
+        print("  Active Profile: |cff00ff00\"" .. (profile.name or "Unnamed") .. "\"|r")
+        print("  Matched Key: |cffffffff" .. tostring(profileKey) .. "|r")
+        if profile.min and profile.max then
+            print("  Range: |cffffffff" .. profile.min .. "-" .. profile.max .. " players|r")
+        end
+        print("  Overrides: |cffffffff" .. overrideCount .. "|r")
+    else
+        print("  Active Profile: |cff999999None (using global settings)|r")
+    end
+    
+    -- Also list all configured profiles for context
+    if autoDb then
+        print("  --- Configured Profiles ---")
+        for _, ctDef in ipairs(CONTENT_TYPES) do
+            local key = ctDef.key
+            if key == "mythic" then
+                local mp = autoDb.mythic and autoDb.mythic.profile
+                if mp then
+                    print("  [Mythic] \"" .. (mp.name or "Unnamed") .. "\" (20 fixed)")
+                end
+            else
+                local profiles = autoDb[key] and autoDb[key].profiles or {}
+                for _, p in ipairs(profiles) do
+                    print("  [" .. ctDef.title .. "] \"" .. p.name .. "\" (" .. p.min .. "-" .. p.max .. ")")
+                end
+            end
+        end
+    end
 end
