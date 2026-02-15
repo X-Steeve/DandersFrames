@@ -4448,29 +4448,64 @@ function DF:CreateGUI()
     end)
     backBtn:SetScript("OnClick", function() changelogOverlay:Hide() end)
 
+    -- Convert markdown changelog to WoW color-coded plain text
+    local function FormatChangelog(text)
+        if not text or text == "" then return "No changelog available." end
+        local tc = GetThemeColor()
+        local themeHex = format("%02x%02x%02x", tc.r * 255, tc.g * 255, tc.b * 255)
+        local dimHex = format("%02x%02x%02x", C_TEXT_DIM.r * 255, C_TEXT_DIM.g * 255, C_TEXT_DIM.b * 255)
+        local textHex = format("%02x%02x%02x", C_TEXT.r * 255, C_TEXT.g * 255, C_TEXT.b * 255)
+
+        local lines = {}
+        for line in text:gmatch("[^\n]*") do
+            if line:match("^# ") then
+                -- Main title — skip (already shown in header bar)
+            elseif line:match("^## ") then
+                -- Version header
+                local content = line:gsub("^##%s*", "")
+                lines[#lines + 1] = format("|cff%s%s|r", themeHex, content)
+            elseif line:match("^### ") then
+                -- Section header
+                local content = line:gsub("^###%s*", "")
+                lines[#lines + 1] = format("\n|cff%s%s|r", textHex, content)
+            elseif line:match("^%*%s") or line:match("^%-%s") then
+                -- Bullet point
+                local content = line:gsub("^[%*%-]%s*", "")
+                lines[#lines + 1] = format("  |cff%s\226\128\162|r  |cff%s%s|r", themeHex, dimHex, content)
+            elseif line:match("^%s*$") then
+                lines[#lines + 1] = ""
+            else
+                lines[#lines + 1] = format("|cff%s%s|r", dimHex, line)
+            end
+        end
+
+        return table.concat(lines, "\n")
+    end
+
     local changelogScroll = CreateFrame("ScrollFrame", nil, changelogOverlay, "UIPanelScrollFrameTemplate")
     changelogScroll:SetPoint("TOPLEFT", 8, -38)
     changelogScroll:SetPoint("BOTTOMRIGHT", -26, 8)
 
-    local changelogEdit = CreateFrame("EditBox", nil, changelogScroll)
-    changelogEdit:SetMultiLine(true)
-    changelogEdit:SetAutoFocus(false)
-    changelogEdit:SetFontObject(GameFontHighlightSmall)
-    changelogEdit:SetTextColor(C_TEXT_DIM.r, C_TEXT_DIM.g, C_TEXT_DIM.b)
-    changelogEdit:SetWidth(changelogScroll:GetWidth() or 500)
-    changelogEdit:SetText(DF.CHANGELOG_TEXT or "No changelog available.")
-    changelogEdit:SetCursorPosition(0)
-    changelogEdit:EnableMouse(true)
-    changelogEdit:EnableKeyboard(false)
-    changelogEdit:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
-    changelogEdit:SetScript("OnEditFocusGained", function(self) self:HighlightText(0, 0) end)
-    changelogScroll:SetScrollChild(changelogEdit)
+    local changelogContent = CreateFrame("EditBox", nil, changelogScroll)
+    changelogContent:SetMultiLine(true)
+    changelogContent:SetAutoFocus(false)
+    changelogContent:SetFontObject(GameFontHighlightSmall)
+    changelogContent:SetWidth(changelogScroll:GetWidth() or 500)
+    changelogContent:SetText(FormatChangelog(DF.CHANGELOG_TEXT))
+    changelogContent:SetCursorPosition(0)
+    changelogContent:EnableMouse(true)
+    changelogContent:EnableKeyboard(false)
+    changelogContent:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
+    changelogContent:SetScript("OnEditFocusGained", function(self) self:HighlightText(0, 0) end)
+    changelogScroll:SetScrollChild(changelogContent)
 
     infoBtn:SetScript("OnClick", function()
         if changelogOverlay:IsShown() then
             changelogOverlay:Hide()
         else
-            changelogEdit:SetWidth(changelogScroll:GetWidth())
+            changelogContent:SetWidth(changelogScroll:GetWidth())
+            changelogContent:SetText(FormatChangelog(DF.CHANGELOG_TEXT))
+            changelogContent:SetCursorPosition(0)
             changelogOverlay:Show()
         end
     end)
