@@ -2470,6 +2470,54 @@ function DF:SetupGUIPages(GUI, CreateCategory, CreateSubTab, BuildPage)
         Add(colorGroup, nil, 2)
     end)
     
+    -- Bars > Class Power (Holy Power, Chi, Combo Points, etc. - player frame only)
+    local pageClassPower = CreateSubTab("bars", "bars_classpower", "Class Power")
+    BuildPage(pageClassPower, function(self, db, Add, AddSpace, AddSyncPoint)
+        Add(CreateCopyButton(self.child, {"classPower"}, "Class Power"), 25, 2)
+        Add(GUI:CreateHeader(self.child, "Class Power Pips"), 40, "both")
+        Add(GUI:CreateLabel(self.child, "Displays class-specific resources (Holy Power, Chi, Combo Points, Soul Shards, Arcane Charges, Essence) as colored pips on your player frame.", 560), 50, "both")
+        AddSpace(10, "both")
+        
+        Add(GUI:CreateCheckbox(self.child, "Enable Class Power Pips", db, "classPowerEnabled", function()
+            self:RefreshStates()
+            if DF.RefreshClassPower then DF.RefreshClassPower() end
+        end), 25, 1)
+        
+        local function HideClassPower(d)
+            return not d.classPowerEnabled
+        end
+        
+        AddSpace(10, 1)
+        Add(GUI:CreateHeader(self.child, "Size"), 40, 1)
+        
+        local cpHeight = Add(GUI:CreateSlider(self.child, "Pip Height", 1, 12, 1, db, "classPowerHeight", nil, function() if DF.RefreshClassPower then DF.RefreshClassPower() end end, true), 55, 1)
+        cpHeight.hideOn = HideClassPower
+        
+        local cpGap = Add(GUI:CreateSlider(self.child, "Gap Between Pips", 0, 5, 1, db, "classPowerGap", nil, function() if DF.RefreshClassPower then DF.RefreshClassPower() end end, true), 55, 1)
+        cpGap.hideOn = HideClassPower
+        
+        local cpIgnoreFade = Add(GUI:CreateCheckbox(self.child, "Ignore Full Health Fade", db, "classPowerIgnoreFade", function()
+            if DF.UpdateClassPowerAlpha then DF.UpdateClassPowerAlpha() end
+        end), 25, 1)
+        cpIgnoreFade.hideOn = HideClassPower
+        
+        Add(GUI:CreateHeader(self.child, "Position"), 40, 2)
+        local anchorOptions = {
+            INSIDE_BOTTOM = "Inside (Bottom)",
+            INSIDE_TOP = "Inside (Top)",
+            BOTTOM = "Below Health Bar",
+            TOP = "Above Health Bar",
+        }
+        local cpAnchor = Add(GUI:CreateDropdown(self.child, "Anchor", anchorOptions, db, "classPowerAnchor", function() if DF.RefreshClassPower then DF.RefreshClassPower() end end), 55, 2)
+        cpAnchor.hideOn = HideClassPower
+        
+        local cpX = Add(GUI:CreateSlider(self.child, "Offset X", -30, 30, 1, db, "classPowerX", nil, function() if DF.RefreshClassPower then DF.RefreshClassPower() end end, true), 55, 2)
+        cpX.hideOn = HideClassPower
+        
+        local cpY = Add(GUI:CreateSlider(self.child, "Offset Y", -20, 20, 1, db, "classPowerY", nil, function() if DF.RefreshClassPower then DF.RefreshClassPower() end end, true), 55, 2)
+        cpY.hideOn = HideClassPower
+    end)
+    
     -- Bars > Absorbs (combined Absorb Shield + Heal Absorb with collapsible sections)
     local pageAbsorb = CreateSubTab("bars", "bars_absorb", "Absorbs")
     BuildPage(pageAbsorb, function(self, db, Add, AddSpace)

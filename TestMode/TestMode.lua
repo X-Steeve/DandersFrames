@@ -3580,6 +3580,11 @@ function DF:ShowTestFrames(silent)
         end)
     end
     
+    -- Refresh class power (show/hide based on testShowClassPower)
+    if DF.RefreshClassPower then
+        DF:RefreshClassPower()
+    end
+    
     if not silent then
         print("|cff00ff00DandersFrames:|r Test mode enabled.")
     end
@@ -3868,6 +3873,9 @@ function DF:HideTestFrames(silent)
     if not InCombatLockdown() then
         if DF.UpdateHeaderVisibility then
             DF:UpdateHeaderVisibility()
+        end
+        if DF.RefreshClassPower then
+            DF:RefreshClassPower()
         end
     end
     
@@ -6015,6 +6023,12 @@ function DF:CreateTestPanel()
             end
         end
     end, "auras_bossdebuffs")
+    y = y - checkHeight
+    
+    -- Row 9: Class Power (player frame only - party test mode)
+    panel.showClassPowerCheck = CreateCheckbox(panel, y, col1X, "Class Power", "testShowClassPower", function()
+        if DF.RefreshClassPower then DF.RefreshClassPower() end
+    end, "bars_classpower")
     y = y - checkHeight + 2  -- Slightly reduced gap before sliders
     
     -- Helper to create clickable label that links to settings

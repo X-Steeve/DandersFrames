@@ -4891,6 +4891,11 @@ function DF:UpdateHeaderVisibility()
             end
         end
     end
+
+    -- Class Power pips attach to party or raid player frame; refresh so they re-attach to the now-visible layout
+    if DF.RefreshClassPower then
+        DF:RefreshClassPower()
+    end
 end
 
 function DF:UpdateRaidHeaderVisibility()

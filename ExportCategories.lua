@@ -149,6 +149,15 @@ DF.ExportCategories = {
         "resourceBarBorderColor",
         "resourceBarFrameLevel",
         
+        -- Class Power (player frame pips)
+        "classPowerEnabled",
+        "classPowerHeight",
+        "classPowerGap",
+        "classPowerAnchor",
+        "classPowerX",
+        "classPowerY",
+        "classPowerIgnoreFade",
+        
         -- Absorb Bar
         "absorbBarMode",
         "absorbBarAnchor",
@@ -998,6 +1007,7 @@ DF.ExportCategories = {
         "testBossDebuffCount",
         "testShowBossDebuffs",
         "testShowTargetedSpell",
+        "testShowClassPower",
     },
     
     -- ===========================================

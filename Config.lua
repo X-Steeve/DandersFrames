@@ -1453,6 +1453,15 @@ DF.PartyDefaults = {
     resourceBarX = 0,
     resourceBarY = 0,
 
+    -- Class Power (Holy Power, Chi, Combo Points, etc. - player frame only)
+    classPowerEnabled = false,
+    classPowerHeight = 4,
+    classPowerGap = 1,
+    classPowerAnchor = "INSIDE_BOTTOM",
+    classPowerX = 0,
+    classPowerY = -1,
+    classPowerIgnoreFade = true,
+
     -- Rested Indicator
     restedIndicator = false,
     restedIndicatorAnchor = "TOPRIGHT",
@@ -1628,6 +1637,7 @@ DF.PartyDefaults = {
     testShowSelection = false,
     testShowStatusIcons = false,
     testShowTargetedSpell = false,
+    testShowClassPower = true,
 
     -- Tooltip settings
     tooltipAuraAnchor = "DEFAULT",
@@ -2529,6 +2539,15 @@ DF.RaidDefaults = {
     resourceBarX = 0,
     resourceBarY = 0,
 
+    -- Class Power (Holy Power, Chi, Combo Points, etc. - player frame only)
+    classPowerEnabled = false,
+    classPowerHeight = 4,
+    classPowerGap = 1,
+    classPowerAnchor = "INSIDE_BOTTOM",
+    classPowerX = 0,
+    classPowerY = -1,
+    classPowerIgnoreFade = true,
+
     -- Rested Indicator
     restedIndicator = false,
     restedIndicatorAnchor = "TOPRIGHT",
@@ -2704,6 +2723,7 @@ DF.RaidDefaults = {
     testShowSelection = false,
     testShowStatusIcons = false,
     testShowTargetedSpell = false,
+    testShowClassPower = true,
 
     -- Tooltip settings
     tooltipAuraAnchor = "DEFAULT",
