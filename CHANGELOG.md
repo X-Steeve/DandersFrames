@@ -1,6 +1,6 @@
 # DandersFrames Changelog
 
-## [4.0.6] - 2026-02-15
+## [4.0.7] - 2026-02-16
 
 ### Bug Fixes
 * `/df resetgui` command now works — was referencing wrong frame variable, also shows the GUI after resetting
