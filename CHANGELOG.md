@@ -1,8 +1,15 @@
 # DandersFrames Changelog
 
-## [4.0.7] - 2026-02-16
+## [4.0.7] - 2026-02-18
 
 ### Bug Fixes
+* Fix auto profile override editing contaminating the global profile — snapshot/restore now uses recursive deep copy to prevent shared nested table references
+* Fix extra row spacing when editing auto profile overrides — slider drags now trigger full test frame layout refresh
+* Fix auto profile edit button available on non-active profiles — greyed out with tooltip explaining only the active layout can be edited
+* Fix auto profile override count showing +1 — unmapped keys no longer inflate the badge count
+* Fix raidTestFrameCount not trackable as a profile override — added to OVERRIDE_TAB_MAP under Frame tab
+* Fix auto profile override values not showing on test mode frames — entering edit mode now refreshes test frames after applying overrides
+* Fix profiles not persisting per character — currentProfile is now stored in per-character saved variables so each character remembers their own profile
 * Fix pet frames vanishing after reload — pet frame updates were skipped in header mode, so they were never shown after login or `/rl`
 * Fix pet frame font crash on non-English clients
 * Reduce redundant pet frame updates during startup (throttled from 6 calls to 1-2)
