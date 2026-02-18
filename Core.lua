@@ -168,9 +168,9 @@ function DF:LightweightUpdateFrameSize()
     if mode == "raid" then
         -- Check for raid test mode
         if DF.raidTestMode then
-            -- Update test frames
-            if DF.UpdateRaidTestFrames then
-                DF:UpdateRaidTestFrames()
+            -- Full layout refresh including borders, health bars, fonts etc.
+            if DF.RefreshTestFramesWithLayout then
+                DF:RefreshTestFramesWithLayout()
             end
         else
             -- Call real layout function for live frames
@@ -233,8 +233,9 @@ function DF:LightweightUpdateFrameSpacing()
     if mode == "raid" then
         -- Check for raid test mode
         if DF.raidTestMode then
-            if DF.UpdateRaidTestFrames then
-                DF:UpdateRaidTestFrames()
+            -- Full layout refresh including borders, health bars, fonts etc.
+            if DF.RefreshTestFramesWithLayout then
+                DF:RefreshTestFramesWithLayout()
             end
         else
             if DF.UpdateRaidLayout then
